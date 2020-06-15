@@ -1,0 +1,323 @@
+---
+title: "TruckLoad Cost Health Report"
+output:
+   flexdashboard::flex_dashboard:
+    #orientation: rows
+    source_code: embed
+    logo: T:/SalesAndOps/Sales and Ops Planning/Large Parcel/Forecasting/Dashboards/Actuals/Wayfair-Logo-US-New.png
+---
+
+<style>
+.navbar {
+  background-color:#377586;
+}
+.section.sidebar {
+  top: 61px;
+  border-bottom: 10px solid #ececec;
+  border-left: 10px solid #ececec;
+  background-color: rgba(255, 255, 255, 1);
+}
+</style>
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(RODBC)
+library(lubridate)
+library(plotly)
+library(reshape2)
+library(stringr)
+
+source('T:/SalesAndOps/Transportation/Transportation Finance/z. Personal Folder/Yin Z/CostHealth/costhealth.R')
+ServiceType = 'TL'
+```
+
+High Level Summay
+=====================================
+
+Column {data-width=650}
+-------------------------------------
+
+### WoW Var Summary
+
+```{r}
+ggplot(InvoiceLevelPlot %>% filter(TMSServiceCode == ServiceType),aes(x = InvoiceWeek)) +
+  geom_bar(data = bardata %>% filter(TMSServiceCode == ServiceType), aes(y = value,fill = variable),stat="identity", position=position_dodge()) +
+
+  geom_line(data = linedata%>% filter(TMSServiceCode == ServiceType), aes(y = value * 3000,group = variable,color = variable),size= 1, linetype = 'dashed') +
+  geom_point(data = linedata%>% filter(TMSServiceCode == ServiceType), aes(y = value * 3000,group = variable,color = variable),size= 1.5) +
+  scale_y_continuous(
+    name = "Variance ($)",
+    sec.axis = sec_axis(~./3000, name = "Variance (%)")
+  ) +
+  geom_text(data = linedata %>% filter(TMSServiceCode == ServiceType), aes(label = paste0(round(value,1), '%'),
+                                 y = value * 3000, group = variable),size = 3.2, vjust=0,check_overlap = TRUE) +
+  theme_minimal() +
+  theme(
+    axis.title.y = element_text(color = 'black', size=10),
+    axis.title.y.right = element_text(color = 'black', size=10),
+    plot.title = element_text(size = 10, face = "bold"),
+    legend.position="top",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 8)
+
+  ) +
+  scale_fill_brewer(palette="Blues") +
+  
+  #facet_wrap(~TMSServiceCode) +
+  ggtitle('WoW Cost Variance')
+
+```
+
+Column {data-width=350}
+-------------------------------------
+### WoW Rated/Invoice Var BreakDown $
+
+```{r}
+
+ggplotly(
+  ggplot(data = bardata_item %>% filter(TMSServiceCode == ServiceType), aes(x = InvoiceWeek, y = value,fill = variable)) +
+    geom_bar(stat="identity", position=position_dodge()) +
+    ylab('Var ($)') +
+    #scale_fill_brewer(palette="Spectral") +
+    scale_fill_manual(values=c("#D53E4F", "#FDAE61", "#ABDDA4","#3288BD")) +
+    theme_minimal() +
+    theme(legend.position="top",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 6))
+    #facet_wrap(~TMSServiceCode) +
+    #ggtitle('WoW Cost Variance Breakdown')
+) %>%
+  layout(legend = list(orientation = "h"))
+```
+
+### WoW Rated/Invoice Var BreakDown %
+
+```{r}
+
+myplot = ggplotly(
+  ggplot(linedata_item %>% filter(TMSServiceCode == ServiceType) %>% select(-c('TMSServiceCode')),
+         aes(x = InvoiceWeek,y = value,group = variable,color = variable,text = sprintf('Var:%.2f%%  Type: %s',value,variable))) +
+
+    geom_line(linetype = 'dashed') +
+    geom_point() +
+    ylab('Var (%)') +
+    #scale_fill_brewer(palette="Spectral") +
+    scale_color_manual(values=c("#D53E4F", "#FDAE61", "#ABDDA4","#3288BD")) +
+    ylim(-50,30) + 
+    theme_minimal() +
+        theme(legend.position="top",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 6))
+    #facet_wrap(~TMSServiceCode) +
+    #ggtitle('WoW Cost Variance Breakdown')
+, tooltip = c('x','text')) %>%
+  layout(legend = list(orientation = "h"))
+
+for (i in 1:length(myplot$x$data)){
+  if (!is.null(myplot$x$data[[i]]$name)){
+    myplot$x$data[[i]]$name =  gsub("\\(","",str_split(myplot$x$data[[i]]$name,",")[[1]][1])
+  }
+}
+
+myplot
+```
+
+
+Unplanned ACC
+=====================================
+Column {data-width=500}
+-------------------------------------
+```{r}
+ggplotly(
+  ggplot(data = bardata_item_UnplannedACC %>% filter(TMSServiceCode == ServiceType), aes(x = InvoiceWeek, y = value,fill = variable)) +
+    geom_bar(stat="identity", position=position_dodge()) +
+    ylab('Var ($)') +
+    #scale_fill_brewer(palette="Spectral") +
+    scale_fill_manual(values=c("#D53E4F", "#FDAE61", "#ABDDA4","#3288BD")) +
+    theme_minimal() +
+    theme(#legend.position="bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 6))
+    #facet_wrap(~TMSServiceCode) +
+    #ggtitle('WoW Cost Variance Breakdown')
+) %>%
+  layout(legend = list(orientation = "h",x=0,y=1))
+
+```
+
+
+
+Column {data-width=500}
+-------------------------------------
+```{r}
+myplot = ggplotly(
+  ggplot(linedata_item_UnplannedACC %>% filter(TMSServiceCode == ServiceType) %>% select(-c('TMSServiceCode')),
+         aes(x = InvoiceWeek,y = value,group = variable,color = variable,text = sprintf('Var:%.2f%%  Type: %s',value,variable))) +
+
+    geom_line(linetype = 'dashed') +
+    geom_point() +
+    ylab('Var (%)') +
+    #scale_fill_brewer(palette="Spectral") +
+    scale_color_manual(values=c("#D53E4F", "#FDAE61", "#ABDDA4","#3288BD")) +
+    #ylim(-50,30) + 
+    theme_minimal() +
+        theme(#legend.position="bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 6))
+    #facet_wrap(~TMSServiceCode) +
+    #ggtitle('WoW Cost Variance Breakdown')
+, tooltip = c('x','text')) %>%
+  layout(legend = list(orientation = "h", x = 0, y = 1))
+
+for (i in 1:length(myplot$x$data)){
+  if (!is.null(myplot$x$data[[i]]$name)){
+    myplot$x$data[[i]]$name =  gsub("\\(","",str_split(myplot$x$data[[i]]$name,",")[[1]][1])
+  }
+}
+
+myplot
+```
+
+Spot Rate
+=====================================
+Column {data-width=500}
+-------------------------------------
+### chart1
+```{r}
+ggplotly(ggplot(weeklyspotratetruck, aes(x = InvoiceWeek)) +
+           geom_bar(aes(y = TruckCount),stat="identity",fill = "#66CC99") +
+           ggtitle('Matched Spot Rate Truck')) %>%
+  layout(legend = list(orientation = "h", x = 0, y = 1))
+```
+
+### chart2
+```{r}
+ggplotly(ggplot(weeklyspotratetruck %>%
+                  select(InvoiceYear,InvoiceWeek,SpotTtlCost, LiTtlCost, LiTtlRatedCost) %>%
+                  melt(., id.vars = c('InvoiceYear','InvoiceWeek')),
+                aes(x = InvoiceWeek, y = value, group = variable,fill = variable)) +
+           geom_bar(stat="identity",position=position_dodge()) +
+           ggtitle('Cost Comparison'))
+```
+
+
+
+
+Column {data-width=500}
+-------------------------------------
+### chart3
+```{r}
+ggplotly(ggplot(weeklyspotratetruck %>% 
+                  select(InvoiceYear,InvoiceWeek,`Spot/Invoice Var$`,`Rated/Invoice Var$`) %>%
+                  melt(., id.vars = c('InvoiceYear','InvoiceWeek')), 
+                aes(x = InvoiceWeek, y = value, group = variable,fill = variable)) +
+           geom_bar(stat="identity",position=position_dodge()) +
+           ggtitle('Cost Variance $')) %>%
+  layout(legend = list(orientation = "h", x = 0, y = 1))
+```
+           
+
+### chart4
+```{r}
+ggplotly(ggplot(weeklyspotratetruck %>% 
+                  select(InvoiceYear,InvoiceWeek,`Spot/Invoice Var%`,`Rated/Invoice Var%`) %>%
+                  melt(., id.vars = c('InvoiceYear','InvoiceWeek')), 
+                aes(x = InvoiceWeek, y = value, group = variable,color = variable)) +
+           geom_point() +
+           geom_line() +
+           ggtitle('Cost Variance %')) %>%
+  layout(legend = list(orientation = "h", x = 0, y = 1))
+```
+
+
+
+
+Truckload Matching
+=====================================
+Column {data-width=500}
+-------------------------------------
+```{r}
+ggplotly(ggplot(truckmatchplot %>%
+                  filter(InvoiceWeek %in% hist_week),
+                aes(x = InvoiceWeek, y = InvoiceCount, group = IN_Ex_Issue, color = IN_Ex_Issue)) +
+           geom_point() +
+           geom_line(linetype = 'dashed') +
+           ylab('Invoice Count') +
+           ggtitle('Invoice with Truck Matching Issue')) %>%
+  layout(legend = list( x = 0, y = 1))
+```
+           
+
+Column {data-width=500}
+-------------------------------------
+```{r}
+ggplotly(ggplot(currenthelptruckmatchplot,
+                aes(x = IN_Ex_Issue, y = InvoiceCount, group = IssueString, fill = IssueString)) +
+           geom_bar(stat="identity") +
+           ylab('Invoice Count') +
+           ggtitle('Current Help Status Invoice with Truck Matching Issue')) %>%
+  layout(legend = list(x = 0, y = -2))
+
+```
+
+
+
+  
+Success Metrics
+=====================================
+Row
+-------------------------------------
+    
+### Chart 1
+    
+```{r}
+ggplotly(ggplot(rateplotdata %>% 
+                  melt(., id.vars = c('InvoiceWeek'), 
+                       measure.vars = c('AutoMatchingRate','AutoApproveRate','ReProcessRate')),
+                aes(x = InvoiceWeek, y = value, group = variable, color = variable)) +
+           geom_point() +
+           geom_line(linetype = 'dashed') +
+           ylab('Rate') +
+           ggtitle('Success Metrics'))
+```
+ 
+### Chart 2
+    
+```{r}
+ggplotly(ggplot(rateplotdata %>% 
+                  select(NonActiveHelp, InvoiceWeek,`Active Help`) %>%
+                  melt(., id.vars = c('InvoiceWeek')),
+                aes(x = InvoiceWeek, y = value, group = variable, fill = variable)) +
+           geom_bar(stat="identity") +
+           ylab('Invoice Count') +
+           ggtitle('Invoice Count by Week'))
+``` 
+
+Row
+-------------------------------------
+    
+### Chart 3
+    
+```{r}
+ggplotly(ggplot(snapshot %>% filter(CurrentStatus %in% c('Complete','Help','Disputed')) %>%
+                  mutate(pct = paste0(round(InvoiceCount / sum(InvoiceCount) * 100,1),'%')),
+                aes(x = CurrentStatus, y = InvoiceCount, group = Status, fill = Status)) +
+           geom_bar(stat = 'identity') +
+           geom_text(aes(label = pct,
+           y = InvoiceCount, group = Status),size = 3.2, vjust=0) +
+           ggtitle('Invoice Current Status (past 180 days)'))     
+```
+    
+### Chart 4
+
+```{r}
+ggplotly(ggplot(disputeplotdata,
+                aes(x = DisputeResult, y = InvoiceCount, group = Status, fill = Status)) +
+           geom_bar(stat = 'identity') +
+           # geom_text(aes(label = pct,
+           #               y = InvoiceCount, group = Status),size = 3.2, vjust=0) +
+           theme(axis.text.x = element_text(angle = 30), text = element_text(size=10)) +
+           ggtitle('Dispute Invoice Aging (past 180 days)'))
+```
+                      
